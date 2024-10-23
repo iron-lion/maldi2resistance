@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maldi2resistance"
+version = "0.0.1"
+
+dependencies = [
+    "numpy",
+    "polars",
+    "pandas",
+    "torch",
+    "maldi-learn",
+    "maldi-nn"
+]
+requires-python = ">=3.11"
+
+keywords = ["MALDI-TOF", "Mass spectrum", "Antibiotic", "Antimicrobial resistance"]
+classifiers = [
+  "Programming Language :: Python"
+]
+
+[project.urls]
+Homepage = "https://github.com/JanNiklasWeder/maldi2resistance"
+Repository = "https://github.com/JanNiklasWeder/maldi2resistance"
+"Bug Tracker" = "https://github.com/JanNiklasWeder/maldi2resistance/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/maldi2resistance"]
