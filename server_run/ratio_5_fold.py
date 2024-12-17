@@ -13,6 +13,7 @@ sys.path.append('../')
 from maldi2resistance.data.ArtificalMixed import ArtificialMixedInfection
 from maldi2resistance.data.driams import Driams
 from maldi2resistance.model.MultilabelResMLP import MultilabelResMLP
+from maldi2resistance.model.MLP import AeBasedMLP
 from maldi2resistance.metric.ROC import MultiLabelRocNan
 from maldi2resistance.metric.PrecisionRecall import MultiLabelPRNan
 
@@ -20,11 +21,11 @@ DEVICE = torch.device("cuda")
 EPOCH = 30
 batch_size = 128
 LATENT_SIZE = 512
-#SEED = 76436278
+Modelname = 'MLP'
 SEED = int(sys.argv[1])
 torch.manual_seed(SEED)
 
-output_dir = f'result_ratio_DRIAMS-UMG_E{EPOCH}_B{batch_size}_L{LATENT_SIZE}'
+output_dir = f'result_ratio_{Modelname}_DRIAMS-UMG_E{EPOCH}_B{batch_size}_L{LATENT_SIZE}'
 os.makedirs(output_dir, exist_ok=True)
 
 driams = Driams(
@@ -33,7 +34,6 @@ driams = Driams(
     # antibiotics= ['Ciprofloxacin', 'Ceftriaxone', "Cefepime", "Piperacillin-Tazobactam", "Tobramycin"]
 )
 driams.loading_type = "memory"
-#driams.loading_type = "file"
 
 umg = Driams(
     root_dir="/scratch1/users/park11/micro_ms",
@@ -43,7 +43,6 @@ umg = Driams(
     antibiotics=driams.selected_antibiotics,
 )
 umg.loading_type = "memory"
-#umg.loading_type = "file"
 
 train_size = int(0.8 * len(driams))
 test_size = len(driams) - train_size
@@ -60,14 +59,14 @@ def save_results(_output, _test_labels, _driams, _output_suffix):
     skip_list = ['Aztreonam', 'Benzylpenicillin', 'Clarithromycin', 'Polymyxin B']
 
     ml_roc = MultiLabelRocNan()
-    print(ml_roc.compute(_output, _test_labels, target_antibiotics, create_csv=f"./{output_dir}/aaROC_{_output_suffix}_Seed_{SEED}.csv", skip_list = skip_list))
+    print(ml_roc.compute(_output, _test_labels, target_antibiotics, create_csv=f"./{output_dir}/ROC_{_output_suffix}_Seed_{SEED}.csv", skip_list = skip_list))
     fig_, ax_ = ml_roc()
-    plt.savefig(f"./{output_dir}/aaROC_{_output_suffix}_Seed_{SEED}.png", transparent=True, format= "png", bbox_inches = "tight")
+    plt.savefig(f"./{output_dir}/ROC_{_output_suffix}_Seed_{SEED}.png", transparent=True, format= "png", bbox_inches = "tight")
 
     ml_pr = MultiLabelPRNan()
-    print(ml_pr.compute(_output, _test_labels, target_antibiotics, create_csv=f"./{output_dir}/aaPR_{_output_suffix}_Seed_{SEED}.csv", skip_list = skip_list))
+    print(ml_pr.compute(_output, _test_labels, target_antibiotics, create_csv=f"./{output_dir}/PR_{_output_suffix}_Seed_{SEED}.csv", skip_list = skip_list))
     fig_, ax_ = ml_pr()
-    plt.savefig(f"./{output_dir}/aaPR_{_output_suffix}_Seed_{SEED}.png", transparent=True, format= "png", bbox_inches = "tight")
+    plt.savefig(f"./{output_dir}/PR_{_output_suffix}_Seed_{SEED}.png", transparent=True, format= "png", bbox_inches = "tight")
 
 
 def main():
@@ -79,13 +78,19 @@ def main():
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
 
-    model_filename = f'./{output_dir}/resmlp_driams_Train_Mixed2_Epochs_{EPOCH}_Seed_{SEED}.pt'
+    model_filename = f'./{output_dir}/{Modelname}_driams_Train_Mixed2_Epochs_{EPOCH}_Seed_{SEED}.pt'
     
     if os.path.exists(model_filename):
         model = torch.jit.load(model_filename)
         print(f'model {model_filename} is successfully loaded')
-    else: 
-        model = MultilabelResMLP(input_dim=18000, output_dim=len(driams.selected_antibiotics), hidden_dim=LATENT_SIZE)
+    else:
+        if Modelname == 'MLP':
+            model = AeBasedMLP(input_dim=18000, output_dim=len(driams.selected_antibiotics), hidden_dim=4096, latent_dim=LATENT_SIZE)
+        elif Modelname == 'ResMLP':
+            model = MultilabelResMLP(input_dim=18000, output_dim=len(driams.selected_antibiotics), hidden_dim=LATENT_SIZE)
+        else:
+            exit('Model name error')
+
         model.to(DEVICE)
         model_state = copy.deepcopy(model.state_dict())
         model.train()
@@ -102,12 +107,12 @@ def main():
         print("Start training ...")
         for epoch in tqdm(range(EPOCH)):
             overall_loss = 0
-            
+        
             for batch_idx, (x, y) in enumerate(train_loader):
                        
                 x = x.view(batch_size, 18000)
                 x = x.to(DEVICE)
-                
+
                 split1,split2 = torch.chunk(x, 2)
                 combined = torch.add(split1, split2)
                 combined_features = torch.div(combined, 2)
@@ -158,12 +163,12 @@ def main():
             scheduler.step()
             with tqdm.external_write_mode():
                 print(f"\tAverage Loss: {overall_loss / (batch_idx*batch_size):.6f} \tLearning rate: {scheduler.get_last_lr()[0]:.6f}")
-        
+    
         model_scripted = torch.jit.script(model)
         model_scripted.save(model_filename)
 
         print("Train finish\n Test begins")
-    
+
 
     model.eval()
     for mix_ratio in [x/10.0 for x in range(1,6)]:
@@ -172,7 +177,7 @@ def main():
         
         #
         # single+mixed test run
-        output_suffix = f'resMLP_train_mixed2_test_single_mixed_{mix_ratio}'
+        output_suffix = f'{Modelname}_train_mixed2_test_single_mixed_{mix_ratio}'
         test = torch.utils.data.ConcatDataset([driams_test_dataset, driams_test_dataset_mixed, umg_test_dataset, umg_test_dataset_mixed])
 
         test_loader = DataLoader(test, batch_size=len(test), shuffle=True)
@@ -187,7 +192,7 @@ def main():
 
         #
         # mixed test run
-        output_suffix = f'resMLP_train_mixed2_test_mixed_{mix_ratio}'
+        output_suffix = f'{Modelname}_train_mixed2_test_mixed_{mix_ratio}'
         test = torch.utils.data.ConcatDataset([driams_test_dataset_mixed, umg_test_dataset_mixed])
 
         test_loader = DataLoader(test, batch_size=len(test), shuffle=True)
