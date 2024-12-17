@@ -7,8 +7,8 @@ import polars
 import os
 import pandas as pd
 import torch
-from chemprop.data import MoleculeDatapoint
-from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
+
+
 from maldi_learn.vectorization import BinningVectorizer
 from polars.type_aliases import SchemaDefinition
 from sklearn.model_selection import KFold
@@ -617,11 +617,13 @@ class DriamsSingleAntibiotic(Dataset):
         self.driams = driams
         self.data = []
         self.fp_lookup = FingerprintLookup()
+        from chemprop.featurizers import SimpleMoleculeMolGraphFeaturizer
         self.featurizer = SimpleMoleculeMolGraphFeaturizer()
         self.spectra_lookup = {}
         self.mol_lookup = {}
 
         if prepeare4chemprop:
+            from chemprop.data import MoleculeDatapoint
             self.__return_from_idx = self.__get4Chemprop
 
             for antibiotic_name in self.driams.selected_antibiotics:

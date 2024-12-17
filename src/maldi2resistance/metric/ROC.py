@@ -34,6 +34,7 @@ class MultiLabelRocNan:
         class_names,
         device="cpu",
         create_csv: Union[str, Path, None] = None,
+        skip_list: list = None,
     ):
         if isinstance(create_csv, str):
             create_csv = Path(create_csv)
@@ -52,6 +53,8 @@ class MultiLabelRocNan:
             auRoc = BinaryAUROC(thresholds=self.thresholds)
 
             antibiotic = class_names[i]
+            if (skip_list != None) and (antibiotic in skip_list):
+                continue
 
             # create masked for NaNs and remove those out of the tensor
             mask = torch.isnan(label[:, i])
@@ -105,6 +108,9 @@ class MultiLabelRocNan:
                 writer.writeheader()
 
                 for c in class_names:
+                    if (skip_list != None) and (c in skip_list):
+                        continue
+
                     result = self.__results[c]
 
                     if result is None:
