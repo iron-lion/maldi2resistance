@@ -521,11 +521,10 @@ class Driams(Dataset):
             else:
                 spectrum = polars.read_csv(path, separator=" ", comment_prefix="#")
 
-            # ToDo could cause problems if spectra is not trimmed beforehand
             min_range = min(spectrum["mass.spectra."])
-            min_range = min(min_range, self.transform.min_bin)
+            min_range = max(min_range, self.transform.min_bin)
             max_range = max(spectrum["mass.spectra."])
-            max_range = max(max_range, self.transform.max_bin)
+            max_range = min(max_range, self.transform.max_bin)
 
             bin_edges_ = np.linspace(min_range, max_range, self.transform.n_bins + 1)
 
